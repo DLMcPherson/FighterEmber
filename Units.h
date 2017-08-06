@@ -59,6 +59,13 @@ public:
   int Mov;
   int HP;
 
+  int tintR;
+  int tintG;
+  int tintB;
+
+  int team;
+  bool targetable;
+
   void AssignPath(LinkTile*);
   bool PathAdvance();
   bool isHero;
@@ -77,8 +84,10 @@ public:
 
   OverworldSpritesheet* sprite;
 
+  void animTick();
   void drawIdle();
   void drawSelc();
+  void drawMove();
   int frame;
   int tick;
 private:

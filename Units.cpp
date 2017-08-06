@@ -6,8 +6,8 @@
 using namespace std;
 
 Unit::Unit(){
-  X=rand()%40;
-  Y=rand()%40;
+  X=rand()%38+1;
+  Y=rand()%38+1;
 
   Level = 1;
   HP = 20;
@@ -19,6 +19,12 @@ Unit::Unit(){
   Res = 1;
   Con = 9;
   Mov = 7;
+  team = 1;
+  targetable = 0;
+
+  tintR = 255;
+  tintG = 255;
+  tintB = 255;
 
   isHero = 0;
   traj_head = NULL;
@@ -31,21 +37,26 @@ Unit::Unit(){
   tick = 0;
 }
 
-void Unit::drawIdle(){
-  tick++; tick = tick%20;
-  if(tick%10 == 7 || tick%10==9){
-    frame++;
-    frame = frame%4;
-  }
-  sprite->drawIdle(X,Y,frame);
-}
-
-void Unit::drawSelc(){
+void Unit::animTick(){
   tick++; tick = tick%20;
   if(tick%10 == 8 || tick%10==9){
     frame++;
     frame = frame%4;
   }
+}
+
+void Unit::drawMove(){
+  animTick();
+  sprite->drawDown(X,Y,frame);
+}
+
+void Unit::drawIdle(){
+  animTick();
+  sprite->drawIdle(X,Y,frame);
+}
+
+void Unit::drawSelc(){
+  animTick();
   sprite->drawSelc(X,Y,frame);
 }
 
@@ -143,6 +154,7 @@ void OverworldSpritesheet::draw(SDL_Texture* tex, int X, int Y, int frame){
   Clip.y=0;
   Clip.w=48;
   Clip.h=48;
+  SDL_SetTextureColorMod(tex,255,255,255);
   SDL_RenderCopy(rend, tex, &Clip, &Offset);
   return;
 }

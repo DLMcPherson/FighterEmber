@@ -10,6 +10,8 @@
 
 #define MAPW 40
 #define MAPH 40
+#define NUM_HEROES 4
+#define NUM_ENMIES 4
 
 using namespace std;
 
@@ -27,6 +29,20 @@ SDL_Texture* LoadImageD(string imagePath, SDL_Renderer* ren){
   return(loaded);
 }
 
+void rollout_passOn(int** Dist,int** Map, Unit* ** UMap,int X,int Y, LinkTile* &nexFrontierTail,int steps){
+  if(Dist[X][Y]>steps && Map[X][Y] == 0){
+    if(UMap[X][Y] == NULL){
+      Dist[X][Y]=steps;
+      nexFrontierTail->next = new LinkTile(X,Y);
+      nexFrontierTail = nexFrontierTail->next;
+    }
+    else{
+      UMap[X][Y]->targetable = 1;
+    }
+  }
+
+}
+
 bool rollout(int** Dist,int** Map, Unit* ** UMap,int X,int Y,int Move)
 {
   printf("started rollout \n");
@@ -37,7 +53,7 @@ bool rollout(int** Dist,int** Map, Unit* ** UMap,int X,int Y,int Move)
 
   Dist[X][Y] = 0;
   nexFrontierHead.next = new LinkTile(X,Y);
-  for(int steps=1;steps<= Move;steps++){
+  for(int steps=1;steps<= Move+1;steps++){
     printf("Step %d ... ",steps);
     curFrontierHead.next = nexFrontierHead.next;
     nexFrontierHead.next = NULL;
@@ -47,26 +63,10 @@ bool rollout(int** Dist,int** Map, Unit* ** UMap,int X,int Y,int Move)
       curFrontierTail = curFrontierTail->next;
       int hx = curFrontierTail->X;
       int hy = curFrontierTail->Y;
-      if(Dist[hx+1][hy]>steps && Map[hx+1][hy] == 0 && UMap[hx+1][hy] == NULL){
-        Dist[hx+1][hy]=steps;
-        nexFrontierTail->next = new LinkTile(hx+1,hy);
-        nexFrontierTail = nexFrontierTail->next;
-      }
-      if(Dist[hx-1][hy]>steps && Map[hx-1][hy] == 0 && UMap[hx-1][hy] == NULL){
-        Dist[hx-1][hy]=steps;
-        nexFrontierTail->next = new LinkTile(hx-1,hy);
-        nexFrontierTail = nexFrontierTail->next;
-      }
-      if(Dist[hx][hy-1]>steps && Map[hx][hy-1] == 0 && UMap[hx][hy-1] == NULL){
-        Dist[hx][hy-1]=steps;
-        nexFrontierTail->next = new LinkTile(hx,hy-1);
-        nexFrontierTail = nexFrontierTail->next;
-      }
-      if(Dist[hx][hy+1]>steps && Map[hx][hy+1] == 0 && UMap[hx][hy+1] == NULL){
-        Dist[hx][hy+1]=steps;
-        nexFrontierTail->next = new LinkTile(hx,hy+1);
-        nexFrontierTail = nexFrontierTail->next;
-      }
+      rollout_passOn(Dist,Map,UMap,hx+1,hy,nexFrontierTail,steps);
+      rollout_passOn(Dist,Map,UMap,hx-1,hy,nexFrontierTail,steps);
+      rollout_passOn(Dist,Map,UMap,hx,hy-1,nexFrontierTail,steps);
+      rollout_passOn(Dist,Map,UMap,hx,hy+1,nexFrontierTail,steps);
     }
     // Destroy curFrontier chain
     printf("finished + cleaned \n");
@@ -140,17 +140,21 @@ int main(int argc, char **argv){
   OverworldSpritesheet lyn(ren,"lyn");
 
   // Heroes array
-  Unit Heroes[10];
-  Unit Enmies[10];
+  Unit Heroes[NUM_HEROES];
+  Unit Enmies[NUM_ENMIES];
   Unit* selection;
   bool selected=0;
-  for(int i=0;i<10;i++){
+  for(int i=0;i<NUM_HEROES;i++){
+    Heroes[i].sprite = &lyn;
+    Heroes[i].team = 1;
+    Heroes[i].Y = 30+i%2;
+    Heroes[i].X = 10+i;
+    Enmies[i].sprite = &thief;
+    Enmies[i].team = 2;
+  }
+  for(int i=0;i<NUM_HEROES;i++){
     UMap[Heroes[i].X][Heroes[i].Y] = &(Heroes[i]);
     UMap[Enmies[i].X][Enmies[i].Y] = &(Enmies[i]);
-  }
-  for(int i=0;i<10;i++){
-    Heroes[i].sprite = &lyn;
-    Enmies[i].sprite = &thief;
   }
 
   // Offset shill variable
@@ -172,6 +176,11 @@ int main(int argc, char **argv){
   // ================= MAIN LOOP =========
 	bool Breaker=1;
   int Pause=0;
+  int NumMoves = 0;
+  int CurMove = 0;
+  int LiveHeroes = NUM_HEROES;
+  int LiveEnmies = NUM_ENMIES;
+  bool PlayerTurn = 1;
 	while(Breaker){
 		//First clear the renderer
     SDL_SetRenderDrawColor(ren,40,30,10,255);
@@ -196,41 +205,56 @@ int main(int argc, char **argv){
     }
 
     // Manage the heroes
-    for(int i=0;i<10;i++){
+    LiveHeroes=0;
+    for(int i=0;i<NUM_HEROES;i++){
       // Animate progression through path
+      Heroes[i].animTick();
       if(Heroes[i].traj_head != NULL){
         if(Heroes[i].PathAdvance()){
+          NumMoves++;
           UMap[Heroes[i].X][Heroes[i].Y] = &(Heroes[i]);
           if(Heroes[i].target != NULL) Heroes[i].Attack();
         }
+        //Heroes[i].sprite->drawDown(Heroes[i].X,Heroes[i].Y,Heroes[i].frame);
       }
-      // Render
-      FillTile(Heroes[i].X,Heroes[i].Y,30,60,150,ren);
-      if(Heroes[i].HP<20)
-        FillTile(Heroes[i].X,Heroes[i].Y,10,20,50,ren);
-      if(selection == &(Heroes[i]))
-        Heroes[i].drawSelc();
-      else
-        Heroes[i].drawIdle();
+      {
+        // Render
+        FillTile(Heroes[i].X,Heroes[i].Y,30,60,150,ren);
+        if(Heroes[i].HP<=0)
+          FillTile(Heroes[i].X,Heroes[i].Y,10,20,50,ren);
+        if(selection == &(Heroes[i]))
+          Heroes[i].sprite->drawSelc(Heroes[i].X,Heroes[i].Y,Heroes[i].frame);
+        else
+          Heroes[i].sprite->drawIdle(Heroes[i].X,Heroes[i].Y,Heroes[i].frame);
+      }
+      if(Heroes[i].HP>0){
+        LiveHeroes++;
+      }
     }
 
     // Manage the enemies
-    for(int i=0;i<10;i++){
+    LiveEnmies=0;
+    for(int i=0;i<NUM_ENMIES;i++){
       // Animate progression through path
       if(Enmies[i].traj_head != NULL){
         if(Enmies[i].PathAdvance()){
+          NumMoves++;
           UMap[Enmies[i].X][Enmies[i].Y] = &(Enmies[i]);
           if(Enmies[i].target != NULL) Enmies[i].Attack();
         }
       }
       // Render
       FillTile(Enmies[i].X,Enmies[i].Y,150,20,30,ren);
-      if(Enmies[i].HP<20)
+      if(Enmies[i].HP<=0)
         FillTile(Enmies[i].X,Enmies[i].Y,50,5,10,ren);
       if(selection == &(Enmies[i]))
         Enmies[i].drawSelc();
       else
         Enmies[i].drawIdle();
+      // Tally how many enemies are left
+      if(Enmies[i].HP>0){
+        LiveEnmies++;
+      }
     }
 
     // Draw the cursor
@@ -266,34 +290,24 @@ int main(int argc, char **argv){
             //clickTick = Dist[cursX][cursY];
           }
           // Attack and move
-          if(UMap[cursX][cursY] != NULL && Dist[cursX][cursY] <= selection->Mov +1){
+          if(UMap[cursX][cursY] != NULL){
             Unit* attackTarget = UMap[cursX][cursY];
-            // Search out closest tile to target
-            int backX = cursX;
-            int backY = cursY;
-            int i = Dist[cursX][cursY];
-            if(Dist[cursX+1][cursY]==i-1){
-              backX = cursX+1;
-              backY = cursY;
+            if(attackTarget->targetable && attackTarget->team != selection->team){
+              // Search out closest tile to target
+              int backX = cursX;
+              int backY = cursY;
+              int curDist = 513;
+              checkClosestTouch(Dist,cursX+1,cursY,backX,backY,curDist);
+              checkClosestTouch(Dist,cursX-1,cursY,backX,backY,curDist);
+              checkClosestTouch(Dist,cursX,cursY+1,backX,backY,curDist);
+              checkClosestTouch(Dist,cursX,cursY-1,backX,backY,curDist);
+              // Path to that target
+              LinkTile* path = PathFrom(Dist,backX,backY);
+              selection->AssignPath(path);
+              UMap[selection->X][selection->Y] = NULL;
+              // Queue up attack
+              selection->target = attackTarget;
             }
-            if(Dist[cursX-1][cursY]==i-1){
-              backX = cursX-1;
-              backY = cursY;
-            }
-            if(Dist[cursX][cursY-1]==i-1){
-              backX = cursX;
-              backY = cursY-1;
-            }
-            if(Dist[cursX][cursY+1]==i-1){
-              backX = cursX;
-              backY = cursY+1;
-            }
-            // Path to that target
-            LinkTile* path = PathFrom(Dist,backX,backY);
-            selection->AssignPath(path);
-            UMap[selection->X][selection->Y] = NULL;
-            // Queue up attack
-            selection->target = attackTarget;
           }
           // Clean last selection
           int lo_x = selection->X-10; if(lo_x<0) lo_x=0;
@@ -305,17 +319,23 @@ int main(int argc, char **argv){
               Dist[i][j] = 513;
             }
           }
+          for(int i=0;i<NUM_HEROES;i++)
+            Heroes[i].targetable = 0;
+          for(int i=0;i<NUM_ENMIES;i++)
+            Enmies[i].targetable = 0;
           selection = NULL;
         }
         else if(clickTick == 0){
           // Select new unit
           if(UMap[cursX][cursY] != NULL){
-            // New selection
-            selection = UMap[cursX][cursY];
-            selected = 1;
-            // Rollout destination possibilities
-            rollout(Dist,Map,UMap,cursX,cursY,selection->Mov);
-            printf("F Back \n");
+            if(UMap[cursX][cursY]->team == 1 && UMap[cursX][cursY]->HP>0){
+              // New selection
+              selection = UMap[cursX][cursY];
+              selected = 1;
+              // Rollout destination possibilities
+              rollout(Dist,Map,UMap,cursX,cursY,selection->Mov);
+              printf("F Back \n");
+            }
           }
         }
         break;
@@ -336,16 +356,91 @@ int main(int argc, char **argv){
 		// Player movement
     if(keys[SDLK_ESCAPE])
       Breaker=1;
-		if(keys[SDL_SCANCODE_RIGHT])
-			cursX+=1;
-	  if(keys[SDL_SCANCODE_LEFT])
-			cursX-=1;
-  	if(keys[SDL_SCANCODE_DOWN])
-			cursY+=1;
-	  if(keys[SDL_SCANCODE_UP])
-			cursY-=1;
-    if(keys[SDL_SCANCODE_1])
-      Pause=(Pause+1)%2;
+    if(PlayerTurn){
+  		if(keys[SDL_SCANCODE_RIGHT])
+  			cursX+=1;
+  	  if(keys[SDL_SCANCODE_LEFT])
+  			cursX-=1;
+    	if(keys[SDL_SCANCODE_DOWN])
+  			cursY+=1;
+  	  if(keys[SDL_SCANCODE_UP])
+  			cursY-=1;
+      if(keys[SDL_SCANCODE_1])
+        Pause=(Pause+1)%2;
+    }
+
+    // Turn Switching
+    if(NumMoves>=NUM_HEROES && PlayerTurn){
+      PlayerTurn = 0;
+      NumMoves = 0;
+    }
+    if(NumMoves>=NUM_ENMIES && PlayerTurn==0){
+      PlayerTurn = 1;
+      NumMoves = 0;
+      CurMove = 0;
+    }
+
+    if(LiveEnmies==0){
+      SDL_SetRenderDrawColor(ren,120,180,200,255);
+      SDL_RenderClear(ren);
+      printf("YOU WIN!!\n");
+    }
+
+    // Enemy AI
+    if(CurMove == NumMoves && PlayerTurn==0){
+      selection = &(Enmies[CurMove]);
+      if(selection->HP>0){
+        rollout(Dist,Map,UMap,selection->X,selection->Y,selection->Mov);
+        int i = 0;
+        for(i=0;i<NUM_HEROES;i++){
+          if(Heroes[i].targetable){
+            Unit* attackTarget = &(Heroes[i]);
+            // Search out closest tile to target
+            int atckX= attackTarget->X;
+            int atckY= attackTarget->Y;
+            int backX = atckX;
+            int backY = atckY;
+            int curDist = 513;
+            checkClosestTouch(Dist,atckX+1,atckY,backX,backY,curDist);
+            checkClosestTouch(Dist,atckX-1,atckY,backX,backY,curDist);
+            checkClosestTouch(Dist,atckX,atckY+1,backX,backY,curDist);
+            checkClosestTouch(Dist,atckX,atckY-1,backX,backY,curDist);
+            // Path to that target
+            LinkTile* path = PathFrom(Dist,backX,backY);
+            selection->AssignPath(path);
+            UMap[selection->X][selection->Y] = NULL;
+            // Queue up attack
+            selection->target = attackTarget;
+            i = 100;
+          }
+        }
+        if(selection->target == NULL){
+          NumMoves++;
+        }
+        // Clean last selection
+        int lo_x = selection->X-10; if(lo_x<0) lo_x=0;
+        int hi_x = selection->X+10; if(hi_x>=MAPW) hi_x=MAPW-1;
+        int lo_y = selection->Y-10; if(lo_y<0) lo_x=0;
+        int hi_y = selection->Y+10; if(hi_y>=MAPH) hi_y=MAPH-1;
+        for(int i=lo_x;i<=hi_x;i++){
+          for(int j=lo_y;j<=hi_y;j++){
+            Dist[i][j] = 513;
+          }
+        }
+        for(int i=0;i<NUM_HEROES;i++)
+          Heroes[i].targetable = 0;
+        for(int i=0;i<NUM_ENMIES;i++)
+          Enmies[i].targetable = 0;
+        selection = NULL;
+        CurMove++;
+      }
+      else{
+        CurMove++;
+        NumMoves++;
+      }
+    }
+
+
 
 	}
 

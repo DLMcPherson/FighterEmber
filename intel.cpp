@@ -38,3 +38,11 @@ LinkTile* PathFrom(int** Dist,int cursX, int cursY){
 	// Bake and return
 	return(step);
 }
+
+void checkClosestTouch(int** Dist,int targX,int targY,int &backX,int &backY,int &curDist){
+  if(Dist[targX][targY]<curDist){
+    backX = targX;
+    backY = targY;
+    curDist = Dist[backX][backY];
+  }
+}
